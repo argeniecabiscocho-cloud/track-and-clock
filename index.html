@@ -2118,20 +2118,12 @@ function startSync(){
   },e=>console.warn('activityExtra listener:',e)));
 
   // ── groups (shared, real-time) ──
-  // Load the user's group ID list, then listen to each shared group doc
+  // Load the user's group ID list from their personal doc, then listen to each
   db.doc('users/'+currentUserId+'/meta/myGroups').get().then(s=>{
-    const ids=s.exists?(s.data().ids||[]):[];
-    // Also include any groups already in local memory (e.g. demo groups)
-    const localIds=Object.keys(groupsData).filter(id=>id.startsWith('group_'));
-    const allIds=[...new Set([...ids,...localIds])];
-    listenToSharedGroups(allIds);
-    // Migrate any existing local demo groups to shared path on first load
-    localIds.forEach(gid=>{ if(!ids.includes(gid)) fsSaveSharedGroup(gid); });
-  }).catch(()=>{
-    // Fallback: just listen to whatever is already in groupsData
-    const localIds=Object.keys(groupsData);
-    listenToSharedGroups(localIds);
-  });
+    const ids = s.exists ? (s.data().ids||[]) : [];
+    if(ids.length > 0) listenToSharedGroups(ids);
+    else renderGroupTabs(); // show empty state
+  }).catch(()=>{ renderGroupTabs(); });
 
   // ── library metadata (real-time) ──
   _unsubs.push(fsColl('library').onSnapshot(snap=>{
@@ -3015,76 +3007,25 @@ function updateLibStorageBar(){
 function sendMsg(){const inp=document.getElementById('msgInput');const v=inp.value.trim();if(!v)return;const myName=document.getElementById('sidebarName')?.textContent||'You';const c=document.getElementById('chatArea');const el=document.createElement('div');el.className='msg me';el.innerHTML=`<div class="sender">${myName}</div>${v}`;c.appendChild(el);c.scrollTop=c.scrollHeight;inp.value='';}
 // ===== GROUPS SYSTEM =====
 // Group data store
-let groupsData = {
-  english: {
-    id:'english', name:'English Group', dot:'#a78bfa',
-    accentBg:'rgba(167,139,250,0.2)', accentColor:'#7c3aed',
-    emoji:'📘',
-    members:[
-      {name:'You', emoji:'🌟', isMe:true},
-      {name:'Lia', emoji:'🌸'},
-      {name:'Marco', emoji:'🦁'},
-      {name:'Jake', emoji:'📚'}
-    ],
-    messages:[
-      {sender:'Lia 🌸', me:false, text:'Did everyone read chapter 5?'},
-      {sender:'You', me:true, text:'Yes! Ready for discussion 📚'},
-      {sender:'Marco 🦁', me:false, text:'Almost done, 10 mins!'}
-    ],
-    tasks:[
-      {name:'Arrange seating', meta:'Maria · 21/02/26'},
-      {name:'Submit essay draft', meta:'Jake · 22/02/26'},
-      {name:'Chapter summary', meta:'All members · 23/02/26'}
-    ]
-  },
-  math: {
-    id:'math', name:'Math Group', dot:'#5eead4',
-    accentBg:'rgba(94,234,212,0.2)', accentColor:'#0d9488',
-    emoji:'📗',
-    members:[
-      {name:'You', emoji:'🌟', isMe:true},
-      {name:'Sam', emoji:'🐸'},
-      {name:'Leo', emoji:'🦊'},
-      {name:'Mia', emoji:'⭐'},
-      {name:'Chris', emoji:'🔢'}
-    ],
-    messages:[
-      {sender:'Sam 🐸', me:false, text:'Problem set 4 is tricky 😅'},
-      {sender:'You', me:true, text:'Let me share my notes!'},
-      {sender:'Leo 🦊', me:false, text:'Thanks! Can we meet Thursday?'}
-    ],
-    tasks:[
-      {name:'Problem set #4', meta:'Sam · 20/02/26'},
-      {name:'Graph the functions', meta:'Leo · 21/02/26'}
-    ]
-  },
-  science: {
-    id:'science', name:'Science Group', dot:'#f9a8d4',
-    accentBg:'rgba(249,168,212,0.2)', accentColor:'#be185d',
-    emoji:'🔬',
-    members:[
-      {name:'You', emoji:'🌟', isMe:true},
-      {name:'Alex', emoji:'🧪'},
-      {name:'Jordan', emoji:'🌿'}
-    ],
-    messages:[
-      {sender:'Alex 🧪', me:false, text:'Lab report deadline is Friday!'},
-      {sender:'You', me:true, text:'Already started mine 🧬'},
-      {sender:'Jordan 🌿', me:false, text:'Can we split the sections?'}
-    ],
-    tasks:[
-      {name:'Lab report write-up', meta:'All members · 25/02/26'}
-    ]
-  }
-};
+let groupsData = {};
 
-let currentGroup = 'english';
+let currentGroup = null;
 
 function renderGroupTabs() {
   const container = document.getElementById('groupTabList');
   if (!container) return;
   container.innerHTML = '';
-  Object.values(groupsData).forEach(g => {
+  const groups = Object.values(groupsData);
+  if (groups.length === 0) {
+    container.innerHTML = '<div style="padding:18px;text-align:center;color:var(--mid);font-size:0.85rem;font-weight:600;">No groups yet. Create one or join via invite link! 🎉</div>';
+    // Clear chat area too
+    const chatArea = document.getElementById('groupChatArea');
+    if(chatArea) chatArea.innerHTML = '<div style="text-align:center;color:var(--mid);padding:30px;font-size:0.85rem;">Create or join a group to start chatting 💬</div>';
+    document.getElementById('groupChatTitle').textContent = '💬 Group Chat';
+    document.getElementById('groupMembersRow').innerHTML = '';
+    return;
+  }
+  groups.forEach(g => {
     const div = document.createElement('div');
     div.className = 'group-tab' + (g.id === currentGroup ? ' active' : '');
     div.setAttribute('data-gid', g.id);
@@ -3099,6 +3040,12 @@ function renderGroupTabs() {
     div.onclick = () => switchGroup(g.id, div);
     container.appendChild(div);
   });
+  // Auto-select first group if none selected or current group no longer exists
+  if (!currentGroup || !groupsData[currentGroup]) {
+    currentGroup = groups[0].id;
+    container.querySelector('.group-tab')?.classList.add('active');
+    renderGroupChat(currentGroup);
+  }
 }
 
 function renderGroupChat(gid) {
@@ -3112,7 +3059,8 @@ function renderGroupChat(gid) {
   g.members.forEach(m => {
     const chip = document.createElement('span');
     chip.className = 'member-chip';
-    chip.innerHTML = `<span class="member-dot"></span>${m.emoji} ${m.name}${m.isMe?' <span style="font-size:0.65rem;color:var(--mid);">(you)</span>':''}`;
+    const isMe = m.uid ? m.uid === currentUserId : m.isMe;
+    chip.innerHTML = `<span class="member-dot"></span>${m.emoji} ${m.name}${isMe?' <span style="font-size:0.65rem;color:var(--mid);">(you)</span>':''}`;
     mRow.appendChild(chip);
   });
   // Messages — determine me vs other using senderId compared to currentUserId
@@ -3346,50 +3294,80 @@ function handleInviteLink() {
   if (!joinGroup) return;
 
   const tryJoin = () => {
-    const myName = document.getElementById('sidebarName')?.textContent || 'New Member';
+    // Wait until Firebase AND user are both ready
+    if (!firebaseReady || !currentUserId) { setTimeout(tryJoin, 600); return; }
 
-    // Wait until both Firebase AND the user session are ready
-    if (!firebaseReady || !currentUserId) { setTimeout(tryJoin, 800); return; }
+    const myName = document.getElementById('sidebarName')?.textContent || 'New Member';
 
     db.collection('shared_groups').doc(joinGroup).get().then(snap => {
       if (!snap.exists) {
-        showToast('⚠️ This invite link may have expired or the group no longer exists.', 4000);
+        showToast('⚠️ Group not found. The invite may be expired.', 4000);
         return;
       }
       const g = snap.data();
-      groupsData[g.id] = g;
 
-      // Add user to members if not already in
-      const alreadyIn = g.members.some(m => m.uid === currentUserId || m.name === myName);
+      // Check if already a member by uid OR by name (fallback)
+      const alreadyIn = (g.members||[]).some(m =>
+        (m.uid && m.uid === currentUserId) ||
+        (!m.uid && m.name === myName)
+      );
+
       if (!alreadyIn) {
-        g.members.push({name: myName, emoji: '✨', isMe: true, uid: currentUserId});
-        g.messages.push({sender:'Track & Clock', system:true, text:`🎉 <b>${myName}</b> joined the group!`, ts: Date.now()});
+        const updated = {
+          ...g,
+          members: [...(g.members||[]), {name: myName, emoji:'✨', uid: currentUserId}],
+          messages: [...(g.messages||[]), {
+            sender:'Track & Clock', system:true,
+            text:`🎉 <b>${myName}</b> joined the group!`, ts: Date.now()
+          }],
+          updatedAt: Date.now()
+        };
+        // Save directly to shared_groups
+        db.collection('shared_groups').doc(g.id).set(updated, {merge:true})
+          .catch(e=>console.warn('join save error',e));
+        groupsData[g.id] = updated;
+      } else {
         groupsData[g.id] = g;
-        fsSaveGroup(g.id);
       }
 
-      // Start listening to this group in real time
+      // Save this group to user's personal list
+      db.doc('users/'+currentUserId+'/meta/myGroups').get().then(s=>{
+        const ids = s.exists ? (s.data().ids||[]) : [];
+        if(!ids.includes(g.id)){
+          ids.push(g.id);
+          db.doc('users/'+currentUserId+'/meta/myGroups').set({ids},{merge:true});
+        }
+      }).catch(()=>{});
+
+      // Start real-time listener for this group
       listenToSharedGroups([g.id]);
 
-      // Open the groups panel and switch to this group
+      // Open groups panel
       openFP('groupsPanel');
       setTimeout(() => {
         renderGroupTabs();
-        switchGroup(joinGroup, null);
-        document.querySelectorAll('.group-tab').forEach(t => { if(t.getAttribute('data-gid')===joinGroup) t.classList.add('active'); });
-        const banner = document.getElementById('joinBanner');
-        document.getElementById('joinBannerText').textContent = `🎉 Welcome to ${g.name}!`;
-        document.getElementById('joinBannerSub').textContent = `You've successfully joined. Start chatting with the team!`;
-        banner.style.display = 'flex';
-        setTimeout(() => { banner.style.display = 'none'; }, 8000);
-        addNotification('login', '🎉', 'Joined a Group!', `You joined ${g.emoji} ${g.name} via invite link.`);
-      }, 400);
+        switchGroup(g.id, null);
+        document.querySelectorAll('.group-tab').forEach(t => {
+          if(t.getAttribute('data-gid')===g.id) t.classList.add('active');
+        });
+        if(!alreadyIn){
+          const banner = document.getElementById('joinBanner');
+          document.getElementById('joinBannerText').textContent = `🎉 Welcome to ${g.name}!`;
+          document.getElementById('joinBannerSub').textContent = `You've successfully joined. Start chatting!`;
+          banner.style.display = 'flex';
+          setTimeout(() => { banner.style.display = 'none'; }, 6000);
+        }
+        showToast(`💬 Opened: ${g.emoji} ${g.name}`, 2500);
+      }, 500);
+
     }).catch(e => {
-      console.warn('handleInviteLink fetch error', e);
-      showToast('⚠️ Could not load group. Check your connection.', 3500);
+      console.warn('handleInviteLink error', e);
+      // Retry on network error — don't show error immediately
+      setTimeout(tryJoin, 2000);
     });
   };
-  setTimeout(tryJoin, 1500);
+  // Start trying after a short delay to let auth settle
+  setTimeout(tryJoin, 1000);
 }
 
 // Init groups on panel open — patched into closeFP/openFP via direct call in the existing openFP function
