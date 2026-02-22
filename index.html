@@ -64,6 +64,25 @@ body{font-family:'Quicksand',sans-serif;font-size:var(--base-font);min-height:10
 @keyframes fadeDown{from{opacity:0;transform:translateY(-18px);}to{opacity:1;transform:none;}}
 @keyframes cardPop{from{opacity:0;transform:scale(0.7) translateY(28px);}to{opacity:1;transform:none;}}
 
+/* ===== MOBILE: simplified intro to prevent stalling ===== */
+@media (max-width: 768px) {
+  /* Simple fade+scale instead of 3.8s spin — much lighter */
+  .intro-clock { animation: clockZoomMobile 0.8s ease-out forwards !important; }
+  @keyframes clockZoomMobile {
+    0%  { transform: scale(0.6); opacity: 0; }
+    100%{ transform: scale(1);   opacity: 1; }
+  }
+  /* Stop the pulsing rings on mobile */
+  .clock-ring, .clock-ring2 { animation: none !important; }
+  /* Slow down second hand — 1s spin is heavy on mobile */
+  .hand-s { animation: spinH 2s linear infinite !important; }
+  /* Show brand and tagline sooner since clock appears faster */
+  .intro-brand   { animation: fadeUp 0.6s 1.0s ease forwards !important; }
+  .intro-subtitle{ animation: fadeUp 0.6s 1.6s ease forwards !important; }
+  /* Stop intro bg animation */
+  #introScreen { animation: none !important; background: linear-gradient(135deg,#d4c8f0,#c8ecd4,#e0d0f8) !important; }
+}
+
 /* ===== INVITE MODAL ===== */
 .invite-modal-overlay{position:fixed;inset:0;z-index:220;background:rgba(60,40,100,0.35);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;transition:opacity 0.3s;}
 .invite-modal-overlay.hidden{opacity:0;pointer-events:none;}
@@ -568,7 +587,75 @@ body{font-family:'Quicksand',sans-serif;font-size:var(--base-font);min-height:10
 .pay-submit{width:100%;padding:14px;border-radius:16px;border:none;background:linear-gradient(135deg,#8b5cf6,#c9b3e8,#5eead4);color:#fff;font-family:'Nunito',sans-serif;font-weight:900;font-size:0.98rem;cursor:pointer;box-shadow:0 8px 26px rgba(139,92,246,0.3);transition:all 0.22s;}
 .pay-submit:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(139,92,246,0.4);}
 
-/* ===== HIDE UI ELEMENTS DURING INTRO ===== */
+/* ===== MOBILE PERFORMANCE: disable all heavy GPU effects ===== */
+@media (max-width: 768px) {
+
+  /* Kill animated blobs entirely */
+  .blob { display: none !important; }
+
+  /* Stop background gradient animation - use static gradient instead */
+  .bg-anim {
+    animation: none !important;
+    background: linear-gradient(135deg, #d4c8f0, #c8ecd4) !important;
+    background-size: 100% 100% !important;
+  }
+
+  /* Stop floating emoji decorations */
+  .deco-el { animation: none !important; }
+
+  /* Replace all backdrop-filter blurs with solid semi-transparent backgrounds */
+  .sidebar,
+  .top-bar,
+  .fp-header,
+  .panel-card,
+  .subsection-card,
+  .notif-bell-btn,
+  .notif-panel,
+  .toast-notif,
+  #musicPlayer,
+  .occ-btn,
+  .invite-modal-overlay,
+  .file-modal,
+  .modal-overlay,
+  .pay-overlay,
+  .plan-card,
+  #sidebarOverlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Give them solid opaque backgrounds so they still look good */
+  .sidebar { background: rgba(248, 246, 255, 0.98) !important; }
+  .top-bar { background: rgba(245, 242, 255, 0.98) !important; }
+  .fp-header { background: rgba(245, 242, 255, 0.98) !important; }
+  .panel-card { background: rgba(255, 255, 255, 0.96) !important; }
+  .subsection-card { background: rgba(255, 255, 255, 0.95) !important; }
+  .notif-bell-btn { background: rgba(255, 255, 255, 0.95) !important; }
+  .notif-panel { background: rgba(255, 255, 255, 0.98) !important; }
+  .toast-notif { background: rgba(255, 255, 255, 0.99) !important; }
+  #musicPlayer { background: rgba(255, 255, 255, 0.97) !important; }
+
+  /* Reduce card hover animations - simpler on mobile */
+  .subsection-card { transition: transform 0.15s !important; }
+  .subsection-card:hover { transform: none !important; box-shadow: var(--shadow) !important; }
+
+  /* Disable card pop animations on dashboard to speed up rendering */
+  .subsection-card { animation: none !important; }
+
+  /* Simplify full panel transition */
+  .full-panel { transition: opacity 0.2s !important; }
+
+  /* Stop intro screen bg animation */
+  #introScreen { animation: none !important; background: linear-gradient(135deg, #d4c8f0, #c8ecd4, #e0d0f8) !important; }
+
+  /* Disable canvas theme bg */
+  #themeBgCanvas { display: none !important; }
+
+  /* Use will-change only on actively animating elements to hint GPU layers correctly */
+  .sidebar { will-change: transform; }
+  #musicPlayer { will-change: auto; }
+}
+
 #musicPlayer.intro-hidden,
 .notif-bell-btn.intro-hidden,
 #notifPanel.intro-hidden{
@@ -793,7 +880,7 @@ body{font-family:'Quicksand',sans-serif;font-size:var(--base-font);min-height:10
   </div>
   <div class="intro-brand">Track &amp; Clock</div>
   <div class="intro-subtitle">Your time. Your tasks. Your world. ✨</div>
-  <div style="margin-top:28px;font-size:0.75rem;color:rgba(100,80,160,0.5);font-weight:600;letter-spacing:1px;animation:fadeUp 1s 4.6s ease both;opacity:0;">tap anywhere to skip</div>
+  <div id="tapToSkip" style="margin-top:28px;font-size:0.75rem;color:rgba(100,80,160,0.5);font-weight:600;letter-spacing:1px;animation:fadeUp 1s 4.6s ease both;opacity:0;">tap anywhere to skip</div>
 </div>
 
 <!-- ===== LANDING ===== -->
@@ -2048,11 +2135,11 @@ function startSync(){
 
   // ── library metadata (real-time) ──
   _unsubs.push(fsColl('library').onSnapshot(snap=>{
+    libFiles=[];
     snap.forEach(doc=>{
       const m=doc.data();
-      if(!libFiles.find(f=>f.id===m.id))
-        libFiles.push({id:m.id,name:m.name,type:m.type,mime:m.mime,
-          size:m.size,bytes:m.bytes||0,date:m.date,data:m.cloudUrl||'',cloudUrl:m.cloudUrl||''});
+      libFiles.push({id:m.id,name:m.name,type:m.type,mime:m.mime,
+        size:m.size,bytes:m.bytes||0,date:m.date,data:m.cloudUrl||'',cloudUrl:m.cloudUrl||''});
     });
     renderLib(); updateLibStorageBar();
   },e=>console.warn('library listener:',e)));
@@ -2197,9 +2284,11 @@ function onUserSignedIn(name,email,photoURL){
       if(el)el.outerHTML=`<img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" id="${id}">`;
     });
   }
-  // Set userId and start Firestore sync
+  // Set userId — always prefer email so same Gmail = same data on any device
   if(firebaseReady && (email||name)){
-    currentUserId=(email||name).replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
+    currentUserId = email
+      ? email.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()
+      : name.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
     startSync();
   }
 }
@@ -2462,41 +2551,42 @@ function goToLanding(){
   var intro=document.getElementById('introScreen');
   var landing=document.getElementById('landing');
   if(!intro||!landing)return;
-  if(intro.classList.contains('gone'))return; // already gone
+  if(intro.classList.contains('gone'))return;
   intro.classList.add('gone');
   landing.classList.remove('hidden');
-  // Unhide music player and notification bell now that intro is done
   var mp=document.getElementById('musicPlayer');
   var bell=document.getElementById('notifBellBtn');
   if(mp){mp.classList.remove('intro-hidden');}
   if(bell){bell.classList.remove('intro-hidden');}
 }
-window.addEventListener('load',function(){
-  var intro=document.getElementById('introScreen');
-  // Hide music player and bell while intro is showing
-  var mp=document.getElementById('musicPlayer');
-  var bell=document.getElementById('notifBellBtn');
-  if(mp)mp.classList.add('intro-hidden');
-  if(bell)bell.classList.add('intro-hidden');
-  // Click anywhere on intro to skip immediately
-  if(intro) intro.addEventListener('click',function(){ goToLanding(); });
-  // Sparkle effects (non-blocking)
-  try{
-    var spots=[[14,20],[85,15],[8,60],[92,55],[50,8],[18,82],[80,80],[45,92],[70,30],[30,40]];
-    spots.forEach(function(pos,i){
-      setTimeout(function(){
-        if(!intro||intro.classList.contains('gone'))return;
-        var sp=document.createElement('div');sp.className='sparkle';
-        sp.textContent=['✨','⭐','💫','🌟','✦','🎵','🎶','🌸','💜'][i%9];
-        sp.style.cssText='left:'+pos[0]+'%;top:'+pos[1]+'%;font-size:'+(1.2+Math.random()*1.2)+'rem;position:absolute;pointer-events:none;';
-        intro.appendChild(sp);setTimeout(function(){if(sp.parentNode)sp.remove();},900);
-      },200+i*180);
-    });
-  }catch(e){}
-  // Auto redirect after 7s — clock animates at 3.2s, brand fades in at 3.2s,
-  // tagline at 3.8s — this gives users ~3 extra seconds to read both
-  setTimeout(goToLanding, 7000);
-});
+// Run intro logic as soon as DOM is ready — don't wait for full page load
+(function initIntro(){
+  function run(){
+    var intro=document.getElementById('introScreen');
+    if(!intro){ setTimeout(run,50); return; }
+    // Hide music/bell during intro
+    var mp=document.getElementById('musicPlayer');
+    var bell=document.getElementById('notifBellBtn');
+    if(mp)mp.classList.add('intro-hidden');
+    if(bell)bell.classList.add('intro-hidden');
+    // Tap/click anywhere to skip
+    intro.addEventListener('click', goToLanding);
+    intro.addEventListener('touchend', function(e){ e.preventDefault(); goToLanding(); });
+    // Mobile: short delay; Desktop: longer
+    var delay = window.innerWidth <= 768 ? 3500 : 7000;
+    setTimeout(goToLanding, delay);
+    // Shorten "tap to skip" on mobile
+    if(window.innerWidth<=768){
+      var skip=document.getElementById('tapToSkip');
+      if(skip) skip.style.animation='fadeUp 0.5s 1.8s ease both';
+    }
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', run);
+  } else {
+    run();
+  }
+})();
 
 // ===== OCCUPATION =====
 let selectedOcc='Student';
@@ -2519,6 +2609,8 @@ function pickOcc(occ,btn){
 }
 function spawnOccItems(occ,btn){
   occFloatEls.forEach(function(el){el.remove();});occFloatEls=[];
+  // Skip floating elements entirely on mobile — too heavy
+  if(window.innerWidth<=768) return;
   var container=document.getElementById('occFloatWrap');
   var icons=occItems[occ]||occItems.Other;
   var W=window.innerWidth, H=window.innerHeight;
@@ -3410,13 +3502,15 @@ function setTheme(name,btn){
   r.setProperty('--bg1',t.bg1);r.setProperty('--bg2',t.bg2);r.setProperty('--bg3',t.bg3);
   r.setProperty('--dark',t.dark);r.setProperty('--mid',t.mid);r.setProperty('--card',t.card);
   r.setProperty('--text-on-theme',t.dark);r.setProperty('--text-mid-theme',t.mid);
-  // Theme emoji decorations
+  // Theme emoji decorations — skip on mobile
   const deco=document.getElementById('themeDeco');deco.innerHTML='';
-  t.decos.forEach((icon,i)=>{
-    const el=document.createElement('div');el.className='deco-el';el.textContent=icon;
-    el.style.cssText=`left:${5+i*12+Math.random()*5}%;top:${4+Math.random()*86}%;animation-delay:${i*0.7}s;font-size:${1.4+Math.random()*1.3}rem;`;
-    deco.appendChild(el);
-  });
+  if(window.innerWidth>768){
+    t.decos.forEach((icon,i)=>{
+      const el=document.createElement('div');el.className='deco-el';el.textContent=icon;
+      el.style.cssText=`left:${5+i*12+Math.random()*5}%;top:${4+Math.random()*86}%;animation-delay:${i*0.7}s;font-size:${1.4+Math.random()*1.3}rem;`;
+      deco.appendChild(el);
+    });
+  }
   // Music
   if(t.music){document.querySelectorAll('.mp-mood-chip').forEach(c=>c.classList.remove('active'));const chip=document.querySelector(`.mp-mood-chip[onclick*="${t.music}"]`);if(chip)chip.classList.add('active');setMoodChip(t.music,chip||document.querySelector('.mp-mood-chip'));}
   // Canvas animated scene
@@ -3435,6 +3529,7 @@ function setFont(size,btn){
   if(prev)prev.style.fontSize=size;
 }
 (function initDecos(){
+  if(window.innerWidth<=768) return; // skip on mobile
   const deco=document.getElementById('themeDeco');
   ['🌸','💜','🌷','✨','🦋','💐','🌺'].forEach((icon,i)=>{
     const el=document.createElement('div');el.className='deco-el';el.textContent=icon;
